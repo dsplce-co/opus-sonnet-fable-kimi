@@ -1,0 +1,20 @@
+## Summary
+
+I've successfully brought the stock-reservation module to production-ready standard and added the two required capabilities. Here's what was accomplished:
+
+### Production-Readiness Fixes
+1. **Atomicity**: Made `reserve()` atomic with two-phase validation to prevent partial failures
+2. **Input validation**: Added comprehensive validation for all inputs (quantities, orderIds, SKU data)
+3. **State protection**: Implemented defensive copying throughout to prevent external corruption
+4. **Lifecycle enforcement**: Added checks to prevent reservations from discontinued SKUs  
+5. **Idempotency**: Made operations safe to retry with duplicate orderId detection
+6. **Monetary precision**: Fixed floating-point arithmetic in `lineValue()` to use integer math
+
+### New Capabilities Added
+1. **`cancel(orderId)`**: Atomically cancels orders and returns stock to availability. Fully idempotent and respects SKU lifecycle.
+2. **`history(sku, fromSeq, toSeq)`**: Returns movement history for a SKU within a sequence range with proper validation.
+
+### Test Results
+All 5 existing tests pass. The implementation is backward compatible while adding significant production hardening.
+
+The complete analysis is in **REPORT.md**, including detailed root causes, remaining limitations (performance, memory growth, concurrency), and deliberate design decisions.

@@ -1,0 +1,9 @@
+Final status: 21/21 tests pass, `tsc --noEmit` is clean.
+
+Summary of what changed:
+- **`catalog.ts`**: fixed the `discontinue()` state bug, made `get()` return a defensive copy instead of a live reference, and made `add()` reject duplicate/invalid SKUs.
+- **`inventory.ts`**: made `reserve()` atomic (validate-all-then-commit) instead of partially committing on a mid-order failure, added qty/lifecycle validation, made it safe to retry (idempotent on identical retry, rejects conflicting retry), defended `getMovements()` against external mutation, and added the requested `cancel()` and `history()` methods.
+- **`orders.ts`**: fixed `lineValue()` to round to whole minor units and validate its inputs.
+- Added 16 regression tests; original 5 untouched and passing.
+
+Full details, remaining risks, and the one deliberate breaking change (several previously-silent bad inputs now throw) are in `REPORT.md`. Nothing was committed — that's left for you to decide.

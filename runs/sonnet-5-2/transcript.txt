@@ -1,0 +1,21 @@
+Done. Summary of what I found and fixed:
+
+**Bugs fixed:**
+1. `catalog.discontinue()` set state to `"active"` instead of `"discontinued"` — the one test already catching this.
+2. `Catalog.add()` had no validation — silently overwrote duplicate SKU ids, accepted negative/fractional quantities and prices.
+3. `Inventory.reserve()` accepted negative `qty`, which inverted sign into a *positive* movement — an adversarial call could manufacture stock from nothing.
+4. `reserve()` ignored SKU lifecycle — could reserve stock for discontinued SKUs.
+5. `reserve()` wasn't atomic across a multi-line order — a failing line left earlier lines' movements committed.
+6. `reserve()` had no idempotency — retrying the same order call double-reserved stock.
+7. `getMovements()` returned the live internal array — callers could corrupt inventory history directly.
+8. `OrderService.lineValue()` used float arithmetic on money, producing non-integer minor units, and had no bounds on qty/discount.
+
+**Added:**
+- `cancel(orderId)` — atomic, idempotent, respects reserved→cancelled lifecycle.
+- `history(sku, fromSeq, toSeq)` — inclusive-range movement lookup.
+
+Every change was verified incrementally against `npx vitest run` (predicted outcome first, then compared), plus a 12-case scratch test file covering the new/adversarial paths (removed before finishing, per your instructions — nothing left behind but the module itself). Final state: all 5 original tests pass, `tsc --noEmit` is clean.
+
+Full writeup is in `REPORT.md`, including the production-readiness review of what I deliberately did *not* change (no persistence layer, no cross-process concurrency control, O(n) `available()` scans) and the three breaking changes worth flagging (duplicate-SKU `add()` now throws, `reserve()` now rejects invalid/discontinued/conflicting-retry input, `getMovements()` returns a copy).
+
+No commits were made — let me know if you'd like this committed or pushed.

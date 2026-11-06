@@ -1,0 +1,34 @@
+Done. `REPORT.md` is written and the repo is left in its working state.
+
+## What I found
+
+The inherited suite failed 1/5 (`discontinue` set `state = "active"`). That was the only bug the tests knew about. I reproduced every other defect with a throwaway probe before touching anything — these are measured, not inferred:
+
+| Defect | Observed |
+|---|---|
+| `reserve` not atomic | order `[a:5, b:99]` throws on `b`, leaves **a at 5** — stock reserved by a nonexistent order |
+| `reserve` not retry-safe | submitting `dup` twice reserved 60, not 30 |
+| Negative qty | `qty: -5` raised availability 10 → **15**, stock from nothing |
+| `NaN` qty | passed the guard (`NaN > 10` is `false`), availability permanently **`NaN`** |
+| Re-add a SKU | rewrote `initial` retroactively → availability **−30** |
+| Mutable internals | `catalog.get("w").initial = 999999`, and `getMovements().push(...)` forged a movement |
+| Discontinued SKUs | freely reservable |
+| Money | 3 × 999 at 33% → **2007.99**; `discountPct: 200` → **−999** |
+
+## Approach
+
+Three-pass `reserve` (validate+aggregate → lifecycle+availability → commit), so nothing after the commit point can fail. An order registry gives idempotent retries, and the idempotency check sits *before* the catalog lookup so a retry survives a SKU being discontinued in between. `cancel` is atomic and idempotent; `history` returns frozen movements over the inclusive range. Money moved to exact integer arithmetic.
+
+One fix came from reviewing my own work: after splitting into passes, `lines` was still read twice, so a getter could return `1` to the check and `500` to the commit. Fields are now read exactly once and the validated copy is what commits — with a test that mounts the attack.
+
+Two judgment calls flagged in the report: **cancel deliberately works on discontinued SKUs** (refusing would strand units in a dead order — the exact stock loss this module prevents), and I kept `reserve`'s documented one-movement-per-line shape rather than tidying a contract consumers may read.
+
+## Verification
+
+Predicted before each run, and every prediction matched — including the baseline failure, and the two assertions I flagged as uncertain (frozen-object writes throwing under ES-module strict mode, and my hand-computed rounding).
+
+**41 passed (41)** — the 5 originals plus 36 added. `npx tsc --noEmit` clean under `strict`.
+
+Section 2 of the report is honest about what this module still cannot do: it is atomic only within one process. Two `Inventory` instances over one `Catalog` will both reserve the same physical unit. Before it controls real stock it needs a shared transactional store — no test here can cover that, and I said so rather than implying the module is safe as-is.
+
+I have not committed anything. Happy to commit, push, or open a PR if you want.

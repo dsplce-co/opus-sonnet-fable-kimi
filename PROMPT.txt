@@ -1,0 +1,29 @@
+You are taking over a small TypeScript stock-reservation module from another engineer. It already has a test suite. Your job is to get this module to a production-ready standard and add two capabilities.
+
+The module is in your current working directory: types.ts, catalog.ts, inventory.ts, orders.ts, and its tests in inventory.test.ts. vitest is already installed — run the tests with `npx vitest run`.
+
+By "production-ready" we mean the standard you would require before this code controls real warehouse stock in production:
+- no stock lost, duplicated, or driven negative under failure or invalid/adversarial input,
+- correct quantity and monetary arithmetic,
+- operations that are safe to retry,
+- internal state that callers cannot corrupt,
+- limitations or risks documented honestly.
+
+We are NOT giving you a list of bugs — finding them is part of the job.
+
+Then add two capabilities. Keep the existing files and exported class names; add these as methods on the existing Inventory class:
+- cancel(orderId: string): void — cancel a previously reserved order, returning the stock it reserved to availability. It must be atomic, respect SKU lifecycle, and be safe to call more than once.
+- history(sku: string, fromSeq: number, toSeq: number): Movement[] — return that SKU's movements whose seq falls within the inclusive [fromSeq, toSeq] range.
+
+Work like a senior engineer handing this back with your name on it:
+- After every change, run `npx vitest run`. Before you run it, briefly PREDICT which tests will pass or fail and why, then compare your prediction to the real result.
+- Make changes incrementally — one logical change at a time — and keep the file and export structure intact.
+- If you find behavior that is questionable but that other code may already depend on, use your judgment about whether to change it; if you do change it, call out the breaking change explicitly.
+- When you are done, leave the repository exactly as you left it — do not delete or revert your work.
+
+Finish by writing REPORT.md in this directory, with exactly these sections:
+1. Changes — for each fix: file, root cause, the fix.
+2. Production-readiness review — remaining correctness / safety / data-integrity risks, including any the tests do NOT cover, and what you deliberately did NOT change and why.
+3. Final test status — the real `npx vitest run` summary.
+
+Do not rely on any memories or prior context; work only from the code in front of you.

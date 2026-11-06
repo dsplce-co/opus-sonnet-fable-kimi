@@ -1,0 +1,27 @@
+Perfect! The module is now production-ready. Here's what I delivered:
+
+## Summary
+
+**All 15 tests pass** ✅
+
+### Fixed Critical Issues:
+1. **catalog.ts:13** - discontinue() was setting wrong state
+2. **Atomicity** - reserve() now validates all lines before committing any movements
+3. **Data corruption** - All getters return defensive copies to prevent external mutation
+4. **Input validation** - Comprehensive checks for quantities, prices, orderIds, and SKU states
+5. **Financial precision** - lineValue() uses integer arithmetic instead of floating-point
+6. **Multi-SKU handling** - Correctly accumulates demand when same SKU appears multiple times in an order
+
+### Added Capabilities:
+1. **cancel(orderId)** - Idempotent cancellation that returns stock to availability
+2. **history(sku, fromSeq, toSeq)** - Query movements by SKU and sequence range
+
+### Production Safeguards:
+- Stock cannot go negative (atomic availability checks)
+- Quantities are validated as positive integers
+- Discontinued SKUs cannot be reserved
+- Duplicate SKU IDs rejected
+- All internal state protected from caller mutation
+- Cancel is safe to retry (idempotent)
+
+The REPORT.md contains the complete analysis including remaining risks (concurrency, performance at scale, data model limitations) and what was deliberately not changed to avoid breaking existing consumers.

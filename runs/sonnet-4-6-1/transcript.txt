@@ -1,0 +1,24 @@
+Done. Here's a summary of everything that was done:
+
+---
+
+**Bugs found and fixed:**
+
+| File | Bug | Fix |
+|------|-----|-----|
+| `catalog.ts:13` | `discontinue` set state to `"active"` (copy-paste typo) | Set to `"discontinued"` |
+| `catalog.ts` | `get`/`add` returned mutable internal references | Return `{ ...sku }` copies |
+| `catalog.ts:6` | No input validation; duplicate `add` silently overwrote | Guard empty id, non-integer/negative initial & unitPrice, duplicate id |
+| `inventory.ts:16` | `reserve` not atomic — partial failure left orphaned movements | Validate all lines first, then commit in a single pass |
+| `inventory.ts:18` | Discontinued SKUs could be reserved | Check `sku.state === "discontinued"` before committing |
+| `inventory.ts:18` | Zero/negative/non-integer qty silently accepted | Require positive integer qty |
+| `inventory.ts:16` | Duplicate orderId doubled stock deduction | Track issued orderIds in a `Set`, throw on reuse |
+| `inventory.ts:42` | `getMovements()` exposed internal mutable array | Return mapped copies |
+| `orders.ts:13` | Float arithmetic for integer minor-unit money | Integer arithmetic with `Math.floor` on the discount |
+| `orders.ts:13` | No validation on `qty`/`discountPct` | Guards added |
+
+**New methods added to `Inventory`:**
+- `cancel(orderId)` — atomic, idempotent (tracks cancelled orders in a Set), returns stock from all reservation movements for that order
+- `history(sku, fromSeq, toSeq)` — validates SKU exists, filters movements by SKU and inclusive seq range, returns defensive copies
+
+**Final test status:** 5/5 pass.

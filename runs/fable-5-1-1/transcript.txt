@@ -1,0 +1,18 @@
+Nothing further is needed; the final run matches what the report records. Done.
+
+**Outcome.** The module is at 46/46 tests with a clean `tsc` check, up from 4/5 at handover. Every step was predicted before running and every prediction matched the real result. REPORT.md is written with the three required sections. Nothing has been committed, per your standing instruction.
+
+**Bugs found and fixed** (details, root causes and file references are in REPORT.md):
+
+- **Catalog**: `discontinue` set state to `"active"`; `add` silently overwrote an existing SKU and reset its stock; no input validation (a `NaN` initial would poison availability forever); internal SKU objects were handed out mutable.
+- **Inventory.reserve**: not atomic, so a failing later line stranded earlier lines as reserved with no order to cancel; ignored the discontinued state; a negative qty *added* stock and `NaN` corrupted the ledger; repeated SKUs in one order could jointly overdraw; retries double-reserved; adversarial line getters could pass validation with one value and commit another.
+- **Inventory.getMovements**: leaked the live ledger array.
+- **OrderService.lineValue**: money computed in floating point. Concrete drift: gross 100 at 55% returned 44.99999999999999. Now integer-only with documented half-up rounding and overflow guards.
+
+**Capabilities added** on `Inventory`: `cancel` (atomic, idempotent, returns stock even for since-discontinued SKUs so the ledger balances) and `history` (inclusive seq range, uses the seq-equals-index invariant to slice rather than scan).
+
+**Breaking changes to be aware of**: duplicate `Catalog.add` throws; `reserve` rejects invalid quantities, discontinued SKUs and id reuse with different lines; `getMovements` returns an immutable snapshot; `lineValue` throws on bad input.
+
+**Risks I could not close in code**, all documented in the report: everything is in-memory and single-process with no durability or locking, there is no ship/fulfil or stock-receipt operation so reservations only ever leave via cancel, the ledger grows unbounded, and the rounding policy needs sign-off from finance.
+
+If you want this to land, I can commit it, push a branch, or open a PR. Say which.

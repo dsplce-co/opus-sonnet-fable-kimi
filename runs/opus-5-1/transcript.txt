@@ -1,0 +1,31 @@
+Done. **43/43 passing**, `tsc --noEmit` clean, all files and exports intact.
+
+## What I found
+
+The existing suite caught one bug (`discontinue` setting `"active"`). I reproduced eight more against the original code before fixing anything — every one of my adversarial probes "passed", which was itself the finding:
+
+| Probe | Original behaviour |
+|---|---|
+| Multi-line reserve, 2nd line short | threw, but **kept the 1st line** — 10 units lost with no order to cancel |
+| `qty: -50` | **minted stock**: 10 on hand → availability 60 |
+| `qty: NaN` | passed the `>` check; availability `NaN` **permanently** |
+| Same `orderId` twice | double-booked — not retry-safe |
+| Discontinued SKU | still fully reservable |
+| `getMovements().push(...)` | live array → drove stock to **−995** |
+| `catalog.get(id).initial = 1e9` | live record; re-`add` gave availability **−2** |
+| `lineValue(999×3, 10%)` | **2697.3** — fractional cents |
+| `discountPct: -100` | **doubled** the price |
+
+## Judgment calls worth your attention
+
+**Cancel into a discontinued SKU is refused** — and since there's no `reactivate`, that stock is stranded with no recovery path. I chose this over silently resurrecting sellable stock for a withdrawn product, but it's a real gap needing an operational answer, not something I could close here. It's §2.1 in the report, flagged as the most important limitation.
+
+**Rounding is half-up on the discount amount.** That's a business decision I made rather than one I was given; confirm it with whoever owns pricing.
+
+**Seven intentional breaking changes**, all converting silent corruption into loud failure — the notable one being `Catalog.get()` returning a frozen copy, so any caller mutating that result must switch to `discontinue()`. All enumerated in the report.
+
+The two biggest remaining risks are **not covered by tests and not fixable inside this module**: there's no concurrency control (`reserve`'s check-then-commit is atomic only because it's synchronous — one `await` reopens the oversell window), and no durability at all. I'd treat both as blockers before this backs real stock.
+
+Two things I'd flag about my own process: I burned a couple of minutes when `vitest --root /` started scanning your filesystem, and one of my new tests asserted availability 96 where the ledger arithmetic gives 97 — I predicted that failure before running, and it was my expectation that was wrong, not the code.
+
+I have not committed anything — the working tree has the modified sources plus `REPORT.md`. Happy to commit, push, or open a PR if you want.

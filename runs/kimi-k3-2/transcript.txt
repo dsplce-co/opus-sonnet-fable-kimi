@@ -1,0 +1,25 @@
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+"kimi-k3" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.
+[claude-code:unrecognized_model] {"model":"kimi-k3","query_source":"generate_session_title"}
+Done. Final state: **27/27 tests pass** (5 original, unchanged + 22 added), `tsc --noEmit` clean, all work left in place, and `REPORT.md` written.
+
+## Summary of what I found and did
+
+**Bugs found (by reading, not a provided list):**
+- `discontinue()` set state to `"active"` — discontinuation was a no-op (this was the one failing baseline test).
+- `reserve()` committed line-by-line → a failing multi-line order stranded partial stock (no atomicity).
+- No quantity validation → negative qty *fabricated* stock; NaN/fractional/Infinity corrupted the ledger.
+- No `orderId` guard → retrying a reserve double-reserved stock.
+- Same-SKU lines within one order were checked independently → oversell possible.
+- Discontinued SKUs remained reservable.
+- `Catalog.get()`/`add()` and `getMovements()` returned live internal objects → callers could rewrite prices, on-hand quantities, and the ledger itself.
+- `Catalog.add()` silently overwrote duplicate SKU ids.
+- `lineValue()` did floating-point money math → fractional minor units (33% off 500 = 334.99999999999997).
+
+**Fixes:** two-phase validate-then-commit reserve; strict input validation; per-SKU aggregated demand check; idempotent retry keyed by `orderId` (same lines = no-op, different = throw); defensive copies on all reads; integer money math with documented half-up rounding; input validation on `Catalog.add` and `lineValue`.
+
+**New capabilities:** `cancel(orderId)` — atomic return of all reserved lines, idempotent on repeat, throws on unknown order, works on discontinued SKUs without reviving them. `history(sku, fromSeq, toSeq)` — inclusive seq range, per-SKU, returns copies, validates range and SKU.
+
+**Breaking changes called out in REPORT.md:** reserve now rejects discontinued SKUs, invalid quantities, and conflicting orderId reuse; `Catalog.add` rejects duplicates; read methods return copies; `lineValue` rounds to integers.
+
+**Honestly documented as remaining risks:** no persistence (crash loses all reservations), atomicity rests on single-threaded run-to-completion, unbounded ledger growth with O(n) `available()`, and no cross-instance coordination — all in REPORT.md §2 with what I deliberately left alone and why.

@@ -1,0 +1,37 @@
+Done. `inventory.test.ts` is unmodified, the scratch probe file is gone, and all work is in place.
+
+## What I found
+
+Baseline was 1/5 failing. I reproduced every defect with a failing assertion before fixing it — ten beyond the one the suite caught:
+
+**Data-integrity, worst first:**
+- **`reserve` was not atomic** — it checked and pushed line-by-line, so a failure on line 2 left line 1 permanently committed with no order record to undo it. Silent stock loss.
+- **Callers could rewrite internal state** — `Catalog.get()` and `getMovements()` returned live references. Setting `sku.initial` drove availability to 999,899.
+- **Negative qty minted stock** (`-(-5)` = a positive movement); **`NaN` qty** slipped past `NaN > available` and poisoned availability permanently.
+- **`reserve` wasn't idempotent** — a client retry double-reserved (100 → 40 instead of 70).
+- **`Catalog.add` silently overwrote** an existing SKU, resetting the `initial` anchor under existing movements.
+- **`discontinue` set state to `"active"`** — the failing test, and it made every lifecycle rule unenforceable.
+- **Discontinued SKUs were freely reservable.**
+- **`lineValue` returned fractional money** (`2697.3000000000002` in a field documented as integer minor units) and accepted `-100%` (200% of gross) or `500%` (a credit).
+
+## Design calls worth your attention
+
+**`cancel` accepts a discontinued SKU even though `reserve` refuses one.** Deliberate asymmetry: refusing the return would pin that order's units in the reserved state forever — the exact stock loss the module exists to prevent. `discontinued` means "no new reservations", not "this stock ceases to exist."
+
+**Six deliberate breaking changes** are listed explicitly in REPORT.md §1 (duplicate `add` throws, frozen returns, discontinued SKUs rejected, one movement per distinct SKU rather than per line, `getMovements` copies, `lineValue` rounds and validates). Each trades a silent integrity failure for a loud error. They belong in a release note.
+
+## The gap I could not close
+
+This is in the report, but it's the thing I'd raise before anyone wires it to real stock: **there is no concurrency control beyond the JS event loop.** `reserve`'s check-then-commit is atomic only *within* one synchronous call. Two processes, or one process with a database behind it, will still race. The in-process idempotency ledger is not a substitute for a transaction plus a uniqueness constraint on `orderId`. Related: nothing is persisted, so a restart silently resets availability to `initial`.
+
+## Test status
+
+```
+ Test Files  2 passed (2)
+      Tests  38 passed (38)
+```
+5 inherited (unmodified) + 33 new in `hardening.test.ts`, including a standing `available() === initial + Σ movements` invariant check. `npx tsc --noEmit` clean under `strict`.
+
+Every prediction I made before running matched the actual result, including that strict-mode ESM would make frozen-object mutation *throw* rather than silently no-op.
+
+Nothing committed — the working tree is dirty and yours to review. Happy to commit, push, or open a PR if you want.

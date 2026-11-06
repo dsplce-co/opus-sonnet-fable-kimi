@@ -1,0 +1,22 @@
+The module is production-hardened, both capabilities are in, and REPORT.md is written. Final state: 40 tests pass, strict type-check clean, nothing left uncommitted on my side beyond the working-tree changes you asked me to leave in place.
+
+**What was wrong** (all reproduced with a probe before fixing):
+- `discontinue` set the state to "active".
+- Re-adding a SKU reset its on-hand under live reservations, and any number was accepted, including NaN and negatives.
+- `get` and `getMovements` leaked internal mutable state, so a caller could rewrite on-hand or wipe the ledger.
+- `reserve` was not atomic, accepted negative quantities that created stock, let NaN poison availability permanently, ignored discontinued SKUs, checked duplicate-SKU lines individually, and double-reserved on retry.
+- `lineValue` returned fractional cents and a negative discount added value.
+
+**What I did**, one change at a time with a prediction before each run, and every prediction matched:
+- Validation on every input, all-or-nothing reserve, per-SKU total stock checks, order registry that makes `orderId` an idempotency key, frozen ledger entries returned as copies, O(1) availability, and integer money with half-up rounding.
+- `cancel` reverses each reservation line atomically, is idempotent, and still returns stock for a since-discontinued SKU, which then cannot be re-reserved.
+- `history` is an inclusive seq-range filter that rejects unknown SKUs and NaN bounds.
+- 35 tests added alongside the 5 originals, including a ledger-balance invariant and a hostile-getter test.
+
+**Breaking changes to note**: duplicate `add` throws, discontinued SKUs cannot be reserved, empty orders throw, reused order ids no longer stack, and `lineValue` rounds. Each is listed in REPORT.md with the reason.
+
+**Risks I left documented rather than solved**: no persistence or crash recovery, single-process atomicity only, an unbounded order registry, no stock inflow beyond `initial`, and string-matched errors.
+
+One environment note: partway through, the root volume hit zero free space and blocked all writes for a few calls. It recovered on its own with 151 MiB free. The harness temp directory at `/private/tmp/claude-501` is 2.4 GB and is worth clearing.
+
+Options from here: commit, push, or open a PR are yours to call.

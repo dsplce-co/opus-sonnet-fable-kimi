@@ -1,0 +1,23 @@
+Done! I've made this stock-reservation module production-ready and added the requested capabilities. Here's what was accomplished:
+
+## Summary
+
+**Bugs Fixed**: 14 issues found and corrected
+- Critical: discontinue() bug, non-atomic reserve, state exposure, incorrect multi-SKU availability
+- Important: missing validation (quantities, prices, SKUs, orderIds), monetary arithmetic error
+- Defensive: duplicate SKU prevention, canceled order ID reuse protection
+
+**New Capabilities Added**:
+- `cancel(orderId)` - atomic, idempotent cancellation that returns reserved stock
+- `history(sku, fromSeq, toSeq)` - query movements by SKU and sequence range
+
+**Test Results**: All 8 tests pass (5 original + 3 new)
+
+The code now handles:
+- Atomic operations (all-or-nothing for multi-line reserves and cancellations)
+- Safe retry (cancel is idempotent, reserve validates before mutating)
+- Protected state (defensive copies, no external mutation)
+- Correct arithmetic (integer-only money calculations, proper multi-line accumulation)
+- Input validation (quantities, prices, orderIds, SKU lifecycle)
+
+See REPORT.md for detailed change log, remaining risks (concurrency, memory growth), and what was deliberately not changed.

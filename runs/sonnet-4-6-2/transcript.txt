@@ -1,0 +1,14 @@
+Done. Here's the summary:
+
+**Bugs fixed (6 across 3 files):**
+1. `catalog.ts:discontinue()` — set `"active"` instead of `"discontinued"` (test was already catching this)
+2. `inventory.ts:reserve()` — non-atomic (partial commit on multi-line failure)
+3. `inventory.ts:reserve()` — no qty validation (negative qty injected stock)
+4. `inventory.ts:reserve()` — ignored SKU lifecycle (discontinued SKUs could be reserved)
+5. `inventory.ts:reserve()` — not idempotent (double-reserve on retry)
+6. `inventory.ts:getMovements()` — returned live internal array (callers could corrupt state)
+7. `orders.ts:lineValue()` — floating-point arithmetic for monetary values
+
+**Added:** `cancel(orderId)` (atomic, idempotent, lifecycle-aware) and `history(sku, fromSeq, toSeq)` on `Inventory`.
+
+**Final state:** 5/5 tests pass. `REPORT.md` written with remaining risks documented.

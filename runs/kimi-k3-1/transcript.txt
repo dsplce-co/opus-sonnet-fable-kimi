@@ -1,0 +1,29 @@
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+"kimi-k3" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.
+[claude-code:unrecognized_model] {"model":"kimi-k3","query_source":"generate_session_title"}
+Done. Summary of the work:
+
+## Bugs found and fixed
+
+| File | Root cause | Fix |
+|---|---|---|
+| `catalog.ts` | `discontinue()` set state to `"active"` | sets `"discontinued"` |
+| `catalog.ts` | duplicate `add()` silently overwrote a SKU; negative/fractional stock & price accepted | full input validation |
+| `catalog.ts` / `inventory.ts` | `get()` / `getMovements()` returned live mutable internals | return defensive copies |
+| `inventory.ts` | `reserve()` pushed movements line-by-line — a mid-order failure leaked partial reservations | validate-all-then-append (atomic) |
+| `inventory.ts` | negative `qty` passed the availability check and **created** stock; fractional qty allowed | positive-integer validation, duplicate SKUs in one order aggregated |
+| `inventory.ts` | retry of `reserve` double-reserved (not retry-safe) | orders recorded; same orderId + same lines = no-op, different lines = throws |
+| `inventory.ts` | discontinued SKUs still reservable | throws (**breaking change**, called out in REPORT.md) |
+| `orders.ts` | `lineValue()` returned fractional minor units (999¢ @ 15% → 849.15) and accepted NaN/out-of-range discounts | integer rounding (half-up, documented) + validation |
+
+## New capabilities
+
+- **`cancel(orderId)`** — appends positive movements mirroring the recorded reservation lines; atomic, idempotent (repeat calls are no-ops), throws on unknown order, works even after the SKU is discontinued (returns are always safe).
+- **`history(sku, fromSeq, toSeq)`** — inclusive seq-range filter over that SKU's movements, returns copies, rejects inverted/non-integer ranges.
+
+## Verification
+
+- Baseline prediction (1 failure: discontinue) confirmed; every subsequent change predicted and verified — final: **24/24 tests pass** (5 original preserved verbatim + 19 new), `tsc --noEmit` clean.
+- `REPORT.md` written with the three required sections, including honest remaining risks (no persistence, no cross-process concurrency, O(n) availability, unbounded log growth).
+
+One environment note: your disk hit 0 bytes free mid-session (926Gi volume, 168Mi available now). Everything succeeded, but you may want to free space before the next run.

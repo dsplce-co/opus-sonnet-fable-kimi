@@ -1,0 +1,10 @@
+Repository is clean and stable: original test file untouched (5/5 passing), type-check clean, scratch test removed.
+
+**Summary of changes:**
+- **catalog.ts** — fixed the `discontinue()` typo (was setting `"active"` instead of `"discontinued"`); made `get()` return a defensive copy so callers can't mutate internal catalog state; made `add()` reject duplicate SKU ids and invalid (negative/non-integer) quantities and prices.
+- **inventory.ts** — made `reserve()` validate all lines (existence, active state, positive-integer qty, aggregated stock) before writing any movement, so a rejected multi-line order leaves no partial stock deduction; blocked negative/zero/fractional quantities (previously a negative qty could inflate stock); blocked reserving discontinued SKUs; blocked duplicate `orderId` reservations; made `getMovements()` return copies instead of the live array. Added `cancel(orderId)` (idempotent, throws on unknown id) and `history(sku, fromSeq, toSeq)`.
+- **orders.ts** — fixed `lineValue()`'s floating-point discount math to round to whole minor units, and added qty/discount validation.
+
+Full rationale, remaining risks I deliberately left alone, and the final test run are in `REPORT.md`.
+
+No commits were made — let me know if you'd like me to commit or open a PR.

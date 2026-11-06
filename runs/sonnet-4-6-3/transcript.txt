@@ -1,0 +1,21 @@
+Done. Here's a summary of everything that was done:
+
+---
+
+**Bugs fixed (4 files touched):**
+
+| File | Bug | Fix |
+|------|-----|-----|
+| `catalog.ts:13` | `discontinue` set state to `"active"` — a no-op | Set to `"discontinued"` |
+| `inventory.ts` | `reserve` was non-atomic — a failure on line N left lines 0..N-1 committed (stock lost) | Validate all lines into a `pending` array, then push atomically |
+| `inventory.ts` | `reserve` accepted discontinued SKUs, zero/negative/float quantities, and duplicate `orderId` (double-deduct) | Added `state === "discontinued"` check, positive-integer guard, and idempotency guard at entry |
+| `inventory.ts` | `getMovements()` returned the live internal array — callers could corrupt it | Return `[...this.movements]` |
+| `orders.ts` | `lineValue` arithmetic produced non-integer minor-unit values via float division | `Math.round(gross * (1 - discountPct / 100))` |
+
+**New capabilities added:**
+- `cancel(orderId)` — atomically returns reserved stock; idempotent; works on discontinued SKUs
+- `history(sku, fromSeq, toSeq)` — filters movements by SKU and inclusive seq range; returns copies
+
+**Breaking changes called out:** `reserve` is now idempotent (same `orderId` twice = no-op, not double-deduction) and rejects discontinued SKUs.
+
+**Final test status:** 5/5 pass.

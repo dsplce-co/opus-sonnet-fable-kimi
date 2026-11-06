@@ -1,0 +1,24 @@
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+"kimi-k3" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.
+[claude-code:unrecognized_model] {"model":"kimi-k3","query_source":"generate_session_title"}
+Done. Final state: **25/25 tests passing**, strict `tsc` clean, `REPORT.md` written.
+
+## Summary of what I found and fixed
+
+**Bugs (found by reading, confirmed by tests):**
+1. **`catalog.ts` — `discontinue()` set `"active"`** instead of `"discontinued"` (the one failing baseline test).
+2. **`inventory.ts` — `reserve()` non-atomic**: a multi-line order failing mid-loop left earlier lines reserved — stock leaked.
+3. **`inventory.ts` — duplicate lines for one SKU** each passed the availability check individually while over-reserving in total → negative stock.
+4. **`inventory.ts` — no qty validation**: negative quantities *created* stock; NaN/fractional/Infinity corrupted the ledger permanently.
+5. **`inventory.ts` — not retry-safe**: re-`reserve("o1", …)` after a timeout double-reserved. Now tracked in an order registry: identical retry = no-op, conflicting reuse = throw, and failed reserves consume no sequence numbers.
+6. **`inventory.ts` — `getMovements()` returned the live ledger**; callers could rewrite history. Now returns per-object copies.
+7. **`orders.ts` — `lineValue()` float arithmetic** produced fractional cents (999 @ 33% → 669.33). Now integer math, discount rounded half-up, inputs validated.
+8. **`catalog.ts` — `add()` silently overwrote** existing SKUs (resetting on-hand under the ledger's feet) and accepted negative/fractional inputs.
+
+**New capabilities on `Inventory`:**
+- **`cancel(orderId)`** — returns all of an order's stock per SKU; atomic (returns fully computed before any append), idempotent (repeat = no-op), throws for unknown orders, works on discontinued SKUs, and a cancelled orderId can never be re-reserved.
+- **`history(sku, fromSeq, toSeq)`** — inclusive seq range, that SKU only, defensive copies, `[]` for empty/inverted ranges, throws on unknown SKU.
+
+**Breaking changes called out in the report:** reserving discontinued SKUs now throws; duplicate `Catalog.add` throws; empty-lines reserve throws; same-orderId-different-lines retry throws; `lineValue` rounding can differ by one minor unit.
+
+**Honest limitations documented:** in-memory only (no persistence), single-instance atomicity assumption, O(ledger) `available()`/`history()`, unbounded ledger growth, no shipment/adjustment movement types, no partial cancels, and `Catalog.get()` still returns the live `Sku` object (left as-is deliberately — flagged as the next hardening step).

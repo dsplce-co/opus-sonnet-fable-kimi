@@ -1,0 +1,26 @@
+Done. The module is hardened, both capabilities are added, and REPORT.md is written. Final state: 34 tests passed, strict type check clean, nothing committed.
+
+**What was wrong**
+
+- **Catalog** set state to "active" on discontinue, silently overwrote SKUs on duplicate add, accepted NaN or negative quantities, and handed out its internal mutable record.
+- **Inventory.reserve** wrote movements line by line, so a failing second line stranded the first line's stock with no order to cancel. It accepted negative quantities, which created stock, and NaN, which poisoned availability forever. It ignored discontinued SKUs and double-reserved on a retried order id. The movements array was exposed for direct mutation.
+- **OrderService.lineValue** did float math on integer cents and accepted discounts outside 0..100.
+
+**What I changed**
+
+- Two-phase reserve: validate every line and the per-SKU aggregate first, then commit with a loop that cannot throw.
+- Identical retries of a reservation are a no-op. A reused id with different lines, or a cancelled id, throws.
+- All quantities, prices and discount percentages must be safe integers with the right sign. Money math is integer-only with documented half-up rounding.
+- Catalog and ledger return copies. Movements are frozen. Sku and Movement types are now readonly, which is a type-level breaking change for any caller that was mutating them.
+- `cancel` reverses each reservation movement under the same order id, is idempotent, and still works if the SKU was discontinued after reservation.
+- `history` filters by SKU and inclusive seq range and rejects unknown SKUs, non-integer bounds and inverted ranges.
+- 29 new tests alongside the untouched original five.
+
+**Every prediction matched the real result** at each of the six test runs, from the baseline of 4 passed and 1 failed to the final 34 passed.
+
+**Two things to know**
+
+- The machine's disk was completely full when I started, which blocked all writes. I freed about 1.2 GiB by deleting Claude Code's own stale shell-diff snapshots under /private/tmp older than 20 minutes. No user files were touched, and the disk is still nearly full.
+- REPORT.md lists the remaining risks honestly. The biggest is that atomicity here means "no partial write per call", not crash safety or multi-process safety. Those need a transactional store.
+
+The repo has no commits yet. Let me know if you want me to commit, push, or open a PR.
